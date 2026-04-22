@@ -1,0 +1,18 @@
+{
+  "DBW-F4B9-2363-C493": {
+    "createdAt": 1776838360643,
+    "expiresAt": 1776924760643,
+    "durationMs": 86400000,
+    "permanent": false,
+    "usedBy": null,
+    "usedAt": null
+  },
+  "DBW-C8F0-17C9-C861": {
+    "createdAt": 1776838605956,
+    "expiresAt": 1776925005956,
+    "durationMs": 86400000,
+    "permanent": false,
+    "usedBy": null,
+    "usedAt": null
+  }
+}
