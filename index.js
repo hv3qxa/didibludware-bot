@@ -1,13 +1,8 @@
-// ═══════════════════════════════════════════════════════════════
-//  DIDIBLUDWARE Key Bot + API Server
-//  Commands:
-//    .key <hours>   — generate a key lasting <hours> hours (bot owner only)
+//  SHORTCUTS BOYYYY
+//    .key <hours>   — generate a key lasting <hours>
 //    .keys          — list all active keys
-//    .revoke <key>  — revoke a key immediately
-//
-//  The Express server exposes:
-//    GET /validate?key=XXXX&player=NAME  — called by the Lua script
-//    GET /keys                           — (protected) list all keys
+//    .revoke <key>  — revoke a key ig
+
 // ═══════════════════════════════════════════════════════════════
 
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
@@ -24,9 +19,7 @@ const CONFIG = {
   PREFIX        : ".",
   KEYS_FILE     : "./keys.json",
 };
-// ───────────────────────────────────────────────────────────────
 
-// ── Key storage helpers ─────────────────────────────────────────
 function loadKeys() {
   if (!fs.existsSync(CONFIG.KEYS_FILE)) return {};
   try { return JSON.parse(fs.readFileSync(CONFIG.KEYS_FILE, "utf8")); }
@@ -37,7 +30,6 @@ function saveKeys(keys) {
   fs.writeFileSync(CONFIG.KEYS_FILE, JSON.stringify(keys, null, 2));
 }
 
-// Remove expired keys and used-up keys, return cleaned store
 function cleanKeys(keys) {
   const now = Date.now();
   for (const [key, data] of Object.entries(keys)) {
@@ -48,13 +40,11 @@ function cleanKeys(keys) {
   return keys;
 }
 
-// Generate a random key string  e.g.  DBW-A3F2-91BC-44D0
 function generateKey() {
   const seg = () => crypto.randomBytes(2).toString("hex").toUpperCase();
   return `DBW-${seg()}-${seg()}-${seg()}`;
 }
 
-// Format ms remaining into a readable string
 function fmtMs(ms) {
   if (ms <= 0) return "Expired";
   const totalSec = Math.floor(ms / 1000);
@@ -68,7 +58,6 @@ function fmtMs(ms) {
   return parts.length ? parts.join(" ") : "<1m";
 }
 
-// ── Discord Bot ─────────────────────────────────────────────────
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -90,7 +79,6 @@ client.on("messageCreate", async (msg) => {
   const command = args.shift().toLowerCase();
   const isOwner = CONFIG.OWNER_IDS.includes(msg.author.id);
 
-  // ── .key <hours> ──────────────────────────────────────────────
   if (command === "key") {
     if (!isOwner) {
       return msg.reply("❌ You don't have permission to generate keys.");
@@ -110,7 +98,7 @@ client.on("messageCreate", async (msg) => {
       expiresAt  : expiresAt,
       durationMs : hours * 3600 * 1000,
       permanent  : false,
-      usedBy     : null,   // null = not yet claimed
+      usedBy     : null, 
       usedAt     : null,
     };
     saveKeys(keys);
@@ -130,7 +118,6 @@ client.on("messageCreate", async (msg) => {
     return msg.reply({ embeds: [embed] });
   }
 
-  // ── .keys ─────────────────────────────────────────────────────
   if (command === "keys") {
     if (!isOwner) return msg.reply("❌ No permission.");
 
@@ -142,8 +129,8 @@ client.on("messageCreate", async (msg) => {
     }
 
     const lines = list.map(([k, d]) => {
-      const status = d.usedBy
-        ? `Used by \`${d.usedBy}\``
+      const status = d.claimed
+        ? `Claimed`
         : "Unclaimed";
       const timeLeft = d.permanent
         ? "PERMANENT"
@@ -160,7 +147,6 @@ client.on("messageCreate", async (msg) => {
     return msg.reply({ embeds: [embed] });
   }
 
-  // ── .revoke <key> ─────────────────────────────────────────────
   if (command === "revoke") {
     if (!isOwner) return msg.reply("❌ No permission.");
     if (!args[0])  return msg.reply("❌ Usage: `.revoke <key>`");
@@ -176,20 +162,12 @@ client.on("messageCreate", async (msg) => {
   }
 });
 
-// ── Express API (called by Lua script) ─────────────────────────
 const app = express();
 
-/*
-  GET /validate?key=DBW-XXXX-XXXX-XXXX&player=PlayerName
-  Response JSON:
-    { valid: true,  permanent: false, expiresAt: 1234567890000, timeLeftMs: 86400000 }
-    { valid: false, reason: "expired" | "invalid" | "already_used_by_other" }
-*/
 app.get("/validate", (req, res) => {
-  const keyStr = (req.query.key    || "").toUpperCase().trim();
-  const player = (req.query.player || "").trim();
+  const keyStr = (req.query.key || "").toUpperCase().trim();
 
-  if (!keyStr || !player) {
+  if (!keyStr) {
     return res.json({ valid: false, reason: "missing_params" });
   }
 
@@ -202,23 +180,15 @@ app.get("/validate", (req, res) => {
   const data = keys[keyStr];
   const now  = Date.now();
 
-  // Expired?
   if (!data.permanent && data.expiresAt <= now) {
     delete keys[keyStr];
     saveKeys(keys);
     return res.json({ valid: false, reason: "expired" });
   }
 
-  // Already claimed by a DIFFERENT player?
-  if (data.usedBy && data.usedBy.toLowerCase() !== player.toLowerCase()) {
-    return res.json({ valid: false, reason: "already_used_by_other" });
-  }
-
-  // First-time claim — bind key to this player and start the timer NOW
-  if (!data.usedBy) {
-    data.usedBy  = player;
-    data.usedAt  = now;
-    // Reset expiresAt to be relative to first use
+  if (!data.claimed) {
+    data.claimed   = true;
+    data.claimedAt = now;
     data.expiresAt = now + data.durationMs;
     keys[keyStr]   = data;
     saveKeys(keys);
@@ -234,7 +204,6 @@ app.get("/validate", (req, res) => {
   });
 });
 
-// Admin endpoint to list keys (requires secret header)
 app.get("/keys", (req, res) => {
   if (req.headers["x-secret"] !== CONFIG.API_SECRET) {
     return res.status(401).json({ error: "unauthorized" });
