@@ -20,7 +20,7 @@ const path    = require("path");
 // ── CONFIG ── edit these ────────────────────────────────────────
 const CONFIG = {
   DISCORD_TOKEN   : process.env.DISCORD_TOKEN,
-  OWNER_IDS       : [process.env.OWNER_ID],
+  OWNER_IDS       : [process.env.OWNER_IDS],
   API_SECRET      : process.env.API_SECRET,
   API_PORT        : process.env.PORT || 3000,
   PREFIX          : ".",
