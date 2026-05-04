@@ -19,13 +19,13 @@ const path    = require("path");
 
 // ── CONFIG ── edit these ────────────────────────────────────────
 const CONFIG = {
-  DISCORD_TOKEN   : "YOUR_BOT_TOKEN_HERE",         // Bot token from Discord Dev Portal
-  OWNER_IDS       : ["YOUR_DISCORD_USER_ID_HERE"],  // Discord user IDs allowed to make keys
-  API_PORT        : 3000,                           // Port the Lua script will HTTP-GET to
-  API_SECRET      : "CHANGE_THIS_SECRET",           // Used for the /keys admin endpoint
-  PREFIX          : ".",                            // Command prefix
-  KEYS_FILE       : "./keys.json",                  // Where keys are saved on disk
-  KEY_LOGS_CHANNEL: "key-logs",                     // Name of the log channel
+  DISCORD_TOKEN   : process.env.DISCORD_TOKEN,
+  OWNER_IDS       : [process.env.OWNER_ID],
+  API_SECRET      : process.env.API_SECRET,
+  API_PORT        : process.env.PORT || 3000,
+  PREFIX          : ".",
+  KEYS_FILE       : "./keys.json",
+  KEY_LOGS_CHANNEL: "key-logs",
 };
 // ───────────────────────────────────────────────────────────────
 
