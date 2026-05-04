@@ -20,7 +20,7 @@ const path    = require("path");
 // ── CONFIG ── edit these ────────────────────────────────────────
 const CONFIG = {
   DISCORD_TOKEN   : process.env.DISCORD_TOKEN,
-  OWNER_IDS       : [process.env.OWNER_IDS],
+  OWNER_IDS       : (process.env.OWNER_IDS || "").split(",").map(id => id.trim()),
   API_SECRET      : process.env.API_SECRET,
   API_PORT        : process.env.PORT || 3000,
   PREFIX          : ".",
@@ -50,10 +50,10 @@ function cleanKeys(keys) {
   return keys;
 }
 
-// Generate a random key string  e.g.  DBW-A3F2-91BC-44D0
+// Generate a random key string  e.g.  A3F2B1-91BC44-D0E7F2-48C1A9
 function generateKey() {
-  const seg = () => crypto.randomBytes(2).toString("hex").toUpperCase();
-  return `DBW-${seg()}-${seg()}-${seg()}`;
+  const seg = () => crypto.randomBytes(3).toString("hex").toUpperCase();
+  return `${seg()}-${seg()}-${seg()}-${seg()}`;
 }
 
 // Format ms remaining into a readable string
@@ -68,6 +68,19 @@ function fmtMs(ms) {
   if (h) parts.push(`${h}h`);
   if (m) parts.push(`${m}m`);
   return parts.length ? parts.join(" ") : "<1m";
+}
+
+// Fetch Roblox avatar thumbnail URL for a given user ID
+async function getRobloxAvatar(robloxId) {
+  try {
+    const res = await fetch(
+      `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${robloxId}&size=150x150&format=Png&isCircular=false`
+    );
+    const json = await res.json();
+    return json?.data?.[0]?.imageUrl || null;
+  } catch {
+    return null;
+  }
 }
 
 // Find the key-logs channel across all guilds
@@ -256,6 +269,44 @@ client.on("messageCreate", async (msg) => {
     saveKeys(keys);
     return msg.reply(`✅ Key \`${k}\` has been revoked.`);
   }
+
+  // ── .mrevoke <key1>, <key2>, ... ──────────────────────────────
+  if (command === "mrevoke") {
+    if (!isOwner) return msg.reply("❌ No permission.");
+
+    // Rejoin args then split by comma to support spaces after commas
+    const raw = args.join(" ");
+    if (!raw.trim()) return msg.reply("❌ Usage: `.mrevoke KEY1, KEY2, KEY3`");
+
+    const toRevoke = raw.split(",").map(k => k.trim().toUpperCase()).filter(Boolean);
+    const keys = loadKeys();
+
+    const revoked  = [];
+    const notFound = [];
+
+    for (const k of toRevoke) {
+      if (keys[k]) {
+        delete keys[k];
+        revoked.push(k);
+      } else {
+        notFound.push(k);
+      }
+    }
+
+    if (revoked.length > 0) saveKeys(keys);
+
+    const lines = [];
+    if (revoked.length)  lines.push(`✅ **Revoked (${revoked.length}):**\n` + revoked.map(k => `\`${k}\``).join("\n"));
+    if (notFound.length) lines.push(`❌ **Not found (${notFound.length}):**\n` + notFound.map(k => `\`${k}\``).join("\n"));
+
+    const embed = new EmbedBuilder()
+      .setColor(revoked.length ? 0x00FF99 : 0xFF4444)
+      .setTitle(`🗑️ Mass Revoke — ${revoked.length}/${toRevoke.length} keys removed`)
+      .setDescription(lines.join("\n\n"))
+      .setTimestamp();
+
+    return msg.reply({ embeds: [embed] });
+  }
 });
 
 // ── Express API (called by Lua script) ─────────────────────────
@@ -340,25 +391,29 @@ app.get("/validate", async (req, res) => {
           ? `https://www.roblox.com/users/${robloxId}/profile`
           : null;
 
+        const avatarUrl = robloxId ? await getRobloxAvatar(robloxId) : null;
+
         const stackNote = bonusMs > 0
-          ? `\n⏫ **Stacked** — Added \`${fmtMs(bonusMs)}\` from previous key`
-          : "";
+          ? `⏫ **Stacked** — Added \`${fmtMs(bonusMs)}\` from previous key`
+          : null;
 
         const logEmbed = new EmbedBuilder()
           .setColor(0x00FF99)
           .setTitle("🔑 Key Redeemed")
           .addFields(
-            { name: "Key",          value: `\`${keyStr}\``,                              inline: false },
-            { name: "Roblox User",  value: robloxUser  || "Unknown",                    inline: true  },
-            { name: "Roblox ID",    value: robloxId    || "Unknown",                    inline: true  },
-            { name: "Profile",      value: profileUrl  ? `[View Profile](${profileUrl})` : "N/A", inline: true },
-            { name: "Server ID",    value: serverId    || "Unknown",                    inline: true  },
-            { name: "Local Time",   value: localTime   || "Unknown",                    inline: true  },
-            { name: "Expires In",   value: fmtMs(data.expiresAt - now),                 inline: true  },
+            { name: "Key",          value: `\`${keyStr}\``,                                        inline: false },
+            { name: "Roblox User",  value: robloxUser  || "Unknown",                              inline: true  },
+            { name: "Roblox ID",    value: robloxId    || "Unknown",                              inline: true  },
+            { name: "Profile",      value: profileUrl  ? `[View Profile](${profileUrl})` : "N/A", inline: true  },
+            { name: "Server ID",    value: serverId    || "Unknown",                              inline: true  },
+            { name: "Local Time",   value: localTime   || "Unknown",                              inline: true  },
+            { name: "Expires In",   value: fmtMs(data.expiresAt - now),                           inline: true  },
           )
-          .setDescription(stackNote || null)
+          .setDescription(stackNote)
           .setFooter({ text: "DIDIBLUDWARE Key System" })
           .setTimestamp();
+
+        if (avatarUrl) logEmbed.setThumbnail(avatarUrl);
 
         await logChannel.send({ embeds: [logEmbed] });
       } else {
